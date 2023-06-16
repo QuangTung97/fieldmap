@@ -30,7 +30,7 @@ type productData struct {
 
 func TestFieldMap__GetMapping(t *testing.T) {
 	t.Run("simple-struct", func(t *testing.T) {
-		fm, err := InitFieldMap[simpleData, field]()
+		fm, err := New[simpleData, field]()
 		assert.Equal(t, nil, err)
 
 		p := fm.GetMapping()
@@ -41,7 +41,7 @@ func TestFieldMap__GetMapping(t *testing.T) {
 	})
 
 	t.Run("complex-struct", func(t *testing.T) {
-		fm, err := InitFieldMap[productData, field]()
+		fm, err := New[productData, field]()
 		assert.Equal(t, nil, err)
 
 		p := fm.GetMapping()

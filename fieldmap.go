@@ -4,19 +4,22 @@ import (
 	"reflect"
 )
 
+// Field ...
+type Field interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64
+}
+
 // FieldMap ...
-type FieldMap[T any, F any] struct {
+type FieldMap[T any, F Field] struct {
 	mapping  *T
 	fields   []F
 	children []int64
 	parent   []F
 }
 
-// InitFieldMap ...
-func InitFieldMap[T any, F any]() (*FieldMap[T, F], error) {
+// New ...
+func New[T any, F Field]() (*FieldMap[T, F], error) {
 	var mapping T
-
-	// TODO check type of F
 
 	var field F
 	fieldType := reflect.TypeOf(field)
