@@ -39,13 +39,14 @@ func New[T any, F Field]() (*FieldMap[T, F], error) {
 	val := reflect.ValueOf(&mapping)
 	val = val.Elem()
 
-	var traverseFunc func(val reflect.Value, isFirst bool) error
-	traverseFunc = func(val reflect.Value, isFirst bool) error {
+	var traverseFunc func(val reflect.Value, isFirst bool, prevParent F) error
+	traverseFunc = func(val reflect.Value, isFirst bool, prevParent F) error {
 		var parent F
 		if !isFirst {
 			fieldName := val.Type().Field(0).Name
 			if fieldName != "Root" {
 				// TODO Check missing root
+				panic("TODO")
 			}
 			parent = getField(ordinal + 1)
 		}
@@ -54,7 +55,7 @@ func New[T any, F Field]() (*FieldMap[T, F], error) {
 			f := val.Field(i)
 
 			if f.Kind() == reflect.Struct {
-				err := traverseFunc(f, false)
+				err := traverseFunc(f, false, parent)
 				if err != nil {
 					return err
 				}
@@ -72,12 +73,13 @@ func New[T any, F Field]() (*FieldMap[T, F], error) {
 			ordinal++
 
 			fields = append(fields, getField(ordinal))
-			parentList = append(parentList, parent)
 
 			if !isFirst && i == 0 {
 				children = append(children, int64(val.NumField()-1))
+				parentList = append(parentList, prevParent)
 			} else {
 				children = append(children, 0)
+				parentList = append(parentList, parent)
 			}
 			f.SetInt(ordinal)
 		}
@@ -85,7 +87,8 @@ func New[T any, F Field]() (*FieldMap[T, F], error) {
 		return nil
 	}
 
-	err := traverseFunc(val, true)
+	var emptyField F
+	err := traverseFunc(val, true, emptyField)
 	if err != nil {
 		return nil, err
 	}
@@ -122,4 +125,18 @@ func (f *FieldMap[T, F]) ChildrenOf(field F) []F {
 // ParentOf ...
 func (f *FieldMap[T, F]) ParentOf(field F) F {
 	return f.parent[f.indexOf(field)]
+}
+
+// AncestorOf ...
+func (f *FieldMap[T, F]) AncestorOf(field F) []F {
+	var empty F
+
+	result := []F{field}
+	for {
+		field = f.ParentOf(field)
+		if field == empty {
+			return result
+		}
+		result = append(result, field)
+	}
 }

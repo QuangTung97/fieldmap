@@ -62,7 +62,12 @@ func TestFieldMap__GetMapping(t *testing.T) {
 
 		assert.Equal(t, p.Seller.Root, fm.ParentOf(p.Seller.ID))
 		assert.Equal(t, p.Seller.Root, fm.ParentOf(p.Seller.Name))
+
+		assert.Equal(t, field(0), fm.ParentOf(p.Seller.Root))
+
 		assert.Equal(t, field(0), fm.ParentOf(p.Sku))
 		assert.Equal(t, field(0), fm.ParentOf(p.Name))
+
+		assert.Equal(t, []field{p.Seller.Name, p.Seller.Root}, fm.AncestorOf(p.Seller.Name))
 	})
 }

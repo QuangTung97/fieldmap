@@ -21,7 +21,7 @@ type emptyStruct struct{}
 // NewMapper ...
 func NewMapper[T1 any, F1 Field, T2 any, F2 Field](
 	source *FieldMap[T1, F1],
-	dest *FieldMap[T2, F2],
+	_ *FieldMap[T2, F2],
 	mappings ...Mapping[F1, F2],
 ) *Mapper[F1, F2] {
 	fieldMap := map[F1][]F2{}
@@ -39,6 +39,14 @@ func NewMapper[T1 any, F1 Field, T2 any, F2 Field](
 	var addMappingList func(mappings []Mapping[F1, F2])
 	addMappingList = func(mappings []Mapping[F1, F2]) {
 		for _, m := range mappings {
+			if source.IsStruct(m.From) {
+				var childMappings []Mapping[F1, F2]
+				for _, child := range source.ChildrenOf(m.From) {
+					childMappings = append(childMappings, NewMapping(child, m.To))
+				}
+				addMappingList(childMappings)
+			}
+
 			set := getDedupSet(m.From)
 			_, existed := set[m.To]
 			if existed {
