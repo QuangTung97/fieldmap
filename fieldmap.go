@@ -16,13 +16,12 @@ type FieldMap[T any, F Field] struct {
 
 	children   []int64
 	parentList []F
-	weights    []float64
+	fieldNames []string
 }
 
 // New ...
 func New[T any, F Field]() (*FieldMap[T, F], error) {
 	var mapping T
-
 	val := reflect.ValueOf(&mapping)
 	val = val.Elem()
 
@@ -33,7 +32,7 @@ func New[T any, F Field]() (*FieldMap[T, F], error) {
 	var emptyField F
 	ordinal := int64(0)
 
-	_, err := f.traverse(val, true, &ordinal, emptyField)
+	err := f.traverse(val, true, &ordinal, emptyField, "")
 	if err != nil {
 		return nil, err
 	}
@@ -53,11 +52,13 @@ func (*FieldMap[T, F]) getFieldType() reflect.Type {
 	return reflect.TypeOf(field)
 }
 
+//revive:disable-next-line:flag-parameter
 func (f *FieldMap[T, F]) traverse(
-	val reflect.Value, isOuter bool, ordinal *int64, prevParent F,
-) (float64, error) {
+	val reflect.Value, isOuterMost bool, ordinal *int64,
+	prevParent F, parentFieldName string,
+) error {
 	var parent F
-	if !isOuter {
+	if !isOuterMost {
 		fieldName := val.Type().Field(0).Name
 		if fieldName != "Root" {
 			// TODO Check missing root
@@ -66,17 +67,15 @@ func (f *FieldMap[T, F]) traverse(
 		parent = f.getField(*ordinal + 1)
 	}
 
-	rootWeightIndex := -1
-	totalWeight := 0.0
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
+		fieldName := val.Type().Field(i).Name
 
 		if field.Kind() == reflect.Struct {
-			childWeight, err := f.traverse(field, false, ordinal, parent)
+			err := f.traverse(field, false, ordinal, parent, fieldName)
 			if err != nil {
-				return 0, err
+				return err
 			}
-			totalWeight += childWeight
 			continue
 		}
 
@@ -92,36 +91,24 @@ func (f *FieldMap[T, F]) traverse(
 
 		f.fields = append(f.fields, f.getField(*ordinal))
 
-		if !isOuter && i == 0 {
+		if !isOuterMost && i == 0 {
 			f.children = append(f.children, int64(val.NumField()-1))
 			f.parentList = append(f.parentList, prevParent)
-
-			rootWeightIndex = len(f.weights)
-			f.weights = append(f.weights, 0.0)
+			f.fieldNames = append(f.fieldNames, parentFieldName)
 		} else {
 			f.children = append(f.children, 0)
 			f.parentList = append(f.parentList, parent)
-
-			f.weights = append(f.weights, 1.0)
-			totalWeight += 1.0
+			f.fieldNames = append(f.fieldNames, fieldName)
 		}
 		field.SetInt(*ordinal)
 	}
 
-	if rootWeightIndex >= 0 {
-		f.weights[rootWeightIndex] = totalWeight
-	}
-
-	return totalWeight, nil
+	return nil
 }
 
 // GetMapping ...
 func (f *FieldMap[T, F]) GetMapping() *T {
 	return f.mapping
-}
-
-func (f *FieldMap[T, F]) GetWeight(field F) float64 {
-	return f.weights[f.indexOf(field)]
 }
 
 func (*FieldMap[T, F]) indexOf(field F) int64 {
@@ -156,5 +143,29 @@ func (f *FieldMap[T, F]) AncestorOf(field F) []F {
 			return result
 		}
 		result = append(result, field)
+	}
+}
+
+// GetFieldName ...
+func (f *FieldMap[T, F]) GetFieldName(field F) string {
+	return f.fieldNames[f.indexOf(field)]
+}
+
+// GetFullFieldName ...
+func (f *FieldMap[T, F]) GetFullFieldName(field F) string {
+	fullName := ""
+	for {
+		name := f.GetFieldName(field)
+		if len(fullName) > 0 {
+			fullName = name + "." + fullName
+		} else {
+			fullName = name
+		}
+
+		field = f.ParentOf(field)
+		var empty F
+		if field == empty {
+			return fullName
+		}
 	}
 }

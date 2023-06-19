@@ -46,11 +46,6 @@ func TestFieldMap__GetMapping(t *testing.T) {
 		assert.Equal(t, field(1), p.Sku)
 		assert.Equal(t, field(2), p.Name)
 		assert.Equal(t, field(3), p.ImageURL)
-
-		// Get Weights
-		assert.Equal(t, 1.0, fm.GetWeight(p.Sku))
-		assert.Equal(t, 1.0, fm.GetWeight(p.Name))
-		assert.Equal(t, 1.0, fm.GetWeight(p.ImageURL))
 	})
 
 	t.Run("complex-struct", func(t *testing.T) {
@@ -85,11 +80,34 @@ func TestFieldMap__GetMapping(t *testing.T) {
 		assert.Equal(t, field(0), fm.ParentOf(p.Name))
 
 		assert.Equal(t, []field{p.Seller.Name, p.Seller.Root}, fm.AncestorOf(p.Seller.Name))
+	})
 
-		// Check Weights
-		assert.Equal(t, 1.0, fm.GetWeight(p.Sku))
-		assert.Equal(t, 2.0, fm.GetWeight(p.Seller.Attr.Root))
-		assert.Equal(t, 5.0, fm.GetWeight(p.Seller.Root))
-		assert.Equal(t, 1.0, fm.GetWeight(p.Seller.Name))
+	t.Run("simple struct get field name", func(t *testing.T) {
+		fm, err := New[simpleData, field]()
+		assert.Equal(t, nil, err)
+
+		p := fm.GetMapping()
+
+		assert.Equal(t, "Sku", fm.GetFieldName(p.Sku))
+		assert.Equal(t, "Name", fm.GetFieldName(p.Name))
+		assert.Equal(t, "ImageURL", fm.GetFieldName(p.ImageURL))
+
+		assert.Equal(t, "ImageURL", fm.GetFullFieldName(p.ImageURL))
+	})
+
+	t.Run("complex struct get field name", func(t *testing.T) {
+		fm, err := New[productData, field]()
+		assert.Equal(t, nil, err)
+
+		p := fm.GetMapping()
+
+		assert.Equal(t, "Sku", fm.GetFieldName(p.Sku))
+		assert.Equal(t, "Name", fm.GetFieldName(p.Name))
+		assert.Equal(t, "Seller", fm.GetFieldName(p.Seller.Root))
+		assert.Equal(t, "ID", fm.GetFieldName(p.Seller.ID))
+		assert.Equal(t, "Name", fm.GetFieldName(p.Seller.Attr.Name))
+
+		assert.Equal(t, "Seller.ID", fm.GetFullFieldName(p.Seller.ID))
+		assert.Equal(t, "Seller.Attr.Code", fm.GetFullFieldName(p.Seller.Attr.Code))
 	})
 }

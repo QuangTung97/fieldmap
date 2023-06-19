@@ -114,6 +114,7 @@ func TestMapping_Complex(t *testing.T) {
 
 		assert.Equal(t, []destField{dest.Detail.Root}, m.FindMappedFields([]sourceField{source.Seller.Root}))
 
+		// From Parent
 		assert.Equal(t, []destField{dest.Detail.Root}, m.FindMappedFields([]sourceField{source.Seller.ID}))
 		assert.Equal(t, []destField{dest.Detail.Root}, m.FindMappedFields([]sourceField{source.Seller.Name}))
 
@@ -146,7 +147,7 @@ func TestMapping_Complex(t *testing.T) {
 		assert.Equal(t, []destField{dest.Info.Root, dest.SearchText}, m.FindMappedFields([]sourceField{source.Sku}))
 	})
 
-	t.Run("one field to multiple dest fields using logical OR", func(t *testing.T) {
+	t.Run("one field to multiple dest fields using logical OR, found the first source field", func(t *testing.T) {
 		sourceFm, err := New[sourceDataComplex, sourceField]()
 		assert.Equal(t, nil, err)
 
@@ -163,10 +164,99 @@ func TestMapping_Complex(t *testing.T) {
 			NewMapping(source.Sku, dest.SearchText),
 		)
 
-		assert.Equal(t, 2.0, m.GetWeight(dest.Info.Root))
-		assert.Equal(t, 1.0, m.GetWeight(dest.Info.Root))
+		assert.Equal(t, []destField{dest.Info.Root}, m.FindMappedFields([]sourceField{source.Sku}))
+	})
+
+	t.Run("one field to multiple dest fields using logical OR, found the first source field", func(t *testing.T) {
+		sourceFm, err := New[sourceDataComplex, sourceField]()
+		assert.Equal(t, nil, err)
+
+		destFm, err := New[destDataComplex, destField]()
+		assert.Equal(t, nil, err)
+
+		source := sourceFm.GetMapping()
+		dest := destFm.GetMapping()
+
+		m := NewMapper(
+			sourceFm, destFm,
+			NewMapping(source.Sku, dest.SearchText),
+			NewMapping(source.Sku, dest.Info.Root),
+		)
 
 		assert.Equal(t, []destField{dest.SearchText}, m.FindMappedFields([]sourceField{source.Sku}))
+	})
+
+	t.Run("children before parent", func(t *testing.T) {
+		sourceFm, err := New[sourceDataComplex, sourceField]()
+		assert.Equal(t, nil, err)
+
+		destFm, err := New[destDataComplex, destField]()
+		assert.Equal(t, nil, err)
+
+		source := sourceFm.GetMapping()
+		dest := destFm.GetMapping()
+
+		m := NewMapper(
+			sourceFm, destFm,
+			NewMapping(source.Seller.Root, dest.SearchText),
+			NewMapping(source.Seller.Name, dest.Detail.Body),
+		)
+
+		assert.Equal(t, []destField{dest.Detail.Body}, m.FindMappedFields([]sourceField{source.Seller.Name}))
+	})
+
+	t.Run("not found any mapping", func(t *testing.T) {
+		sourceFm, err := New[sourceDataComplex, sourceField]()
+		assert.Equal(t, nil, err)
+
+		destFm, err := New[destDataComplex, destField]()
+		assert.Equal(t, nil, err)
+
+		source := sourceFm.GetMapping()
+		dest := destFm.GetMapping()
+
+		m := NewMapper(
+			sourceFm, destFm,
+			NewMapping(source.Sku, dest.Info.Sku),
+		)
+
+		assert.Equal(t, 0, len(m.FindMappedFields([]sourceField{source.Seller.Name})))
+	})
+
+	t.Run("duplicated", func(t *testing.T) {
+		sourceFm, err := New[sourceDataComplex, sourceField]()
+		assert.Equal(t, nil, err)
+
+		destFm, err := New[destDataComplex, destField]()
+		assert.Equal(t, nil, err)
+
+		source := sourceFm.GetMapping()
+		dest := destFm.GetMapping()
+
+		assert.PanicsWithValue(t, `duplicated destination field "Info.Sku" for source field "Sku"`, func() {
+			NewMapper(
+				sourceFm, destFm,
+				NewMapping(source.Sku, dest.Info.Sku),
+				NewMapping(source.Sku, dest.Info.Sku),
+			)
+		})
+	})
+
+	t.Run("with AND not duplicated", func(t *testing.T) {
+		sourceFm, err := New[sourceDataComplex, sourceField]()
+		assert.Equal(t, nil, err)
+
+		destFm, err := New[destDataComplex, destField]()
+		assert.Equal(t, nil, err)
+
+		source := sourceFm.GetMapping()
+		dest := destFm.GetMapping()
+
+		_ = NewMapper(
+			sourceFm, destFm,
+			NewMapping(source.Sku, dest.Info.Sku, dest.SearchText),
+			NewMapping(source.Sku, dest.Info.Sku),
+		)
 	})
 
 	t.Run("multiple source fields to one dest field", func(t *testing.T) {

@@ -1,8 +1,11 @@
 package fieldmap
 
+import "fmt"
+
 // Mapper ...
 type Mapper[F1 Field, F2 Field] struct {
-	fieldMap map[F1][]F2
+	parentOf func(source F1) F1
+	fieldMap map[F1][][]F2
 }
 
 // Mapping ...
@@ -24,10 +27,10 @@ type emptyStruct struct{}
 // NewMapper ...
 func NewMapper[T1 any, F1 Field, T2 any, F2 Field](
 	source *FieldMap[T1, F1],
-	_ *FieldMap[T2, F2],
+	dest *FieldMap[T2, F2],
 	mappings ...Mapping[F1, F2],
 ) *Mapper[F1, F2] {
-	fieldMap := map[F1][]F2{}
+	fieldMap := map[F1][][]F2{}
 	dedupSets := map[F1]map[F2]emptyStruct{}
 
 	getDedupSet := func(source F1) map[F2]emptyStruct {
@@ -42,52 +45,66 @@ func NewMapper[T1 any, F1 Field, T2 any, F2 Field](
 	var addMappingList func(mappings []Mapping[F1, F2])
 	addMappingList = func(mappings []Mapping[F1, F2]) {
 		for _, m := range mappings {
-			if source.IsStruct(m.From) {
-				var childMappings []Mapping[F1, F2]
-				for _, child := range source.ChildrenOf(m.From) {
-					childMappings = append(childMappings, NewMapping(child, m.ToList...))
-				}
-				addMappingList(childMappings)
-			}
-
 			set := getDedupSet(m.From)
-			for _, to := range m.ToList {
-				_, existed := set[to]
-				if existed {
-					return
+			if len(m.ToList) == 1 {
+				for _, to := range m.ToList {
+					_, existed := set[to]
+					if existed {
+						panic(fmt.Sprintf(
+							"duplicated destination field %q for source field %q",
+							dest.GetFullFieldName(to),
+							source.GetFullFieldName(m.From),
+						))
+					}
+					set[to] = emptyStruct{}
 				}
-				set[to] = emptyStruct{}
 			}
-			fieldMap[m.From] = append(fieldMap[m.From], m.ToList...)
+			fieldMap[m.From] = append(fieldMap[m.From], m.ToList)
 		}
 	}
 
 	addMappingList(mappings)
 
 	return &Mapper[F1, F2]{
+		parentOf: source.ParentOf,
 		fieldMap: fieldMap,
+	}
+}
+func (m *Mapper[F1, F2]) findMappedFieldsForSourceField(
+	sourceField F1, resultSet map[F2]emptyStruct, result []F2,
+) []F2 {
+	var empty F1
+
+	for {
+		for _, destFields := range m.fieldMap[sourceField] {
+			for _, f := range destFields {
+				_, existed := resultSet[f]
+				if existed {
+					continue
+				}
+				resultSet[f] = emptyStruct{}
+				result = append(result, f)
+			}
+			if len(destFields) > 0 {
+				return result
+			}
+		}
+
+		sourceField = m.parentOf(sourceField)
+		if sourceField == empty {
+			return result
+		}
 	}
 }
 
 // FindMappedFields ...
 func (m *Mapper[F1, F2]) FindMappedFields(sourceFields []F1) []F2 {
 	var result []F2
-	set := map[F2]emptyStruct{}
+	resultSet := map[F2]emptyStruct{}
 
 	for _, sourceField := range sourceFields {
-		for _, f := range m.fieldMap[sourceField] {
-			_, existed := set[f]
-			if existed {
-				continue
-			}
-			set[f] = emptyStruct{}
-			result = append(result, f)
-		}
+		result = m.findMappedFieldsForSourceField(sourceField, resultSet, result)
 	}
 
 	return result
-}
-
-func (m *Mapper[F1, F2]) GetWeight(destField F2) float64 {
-	return 0
 }
