@@ -42,28 +42,23 @@ func NewMapper[T1 any, F1 Field, T2 any, F2 Field](
 		return s
 	}
 
-	var addMappingList func(mappings []Mapping[F1, F2])
-	addMappingList = func(mappings []Mapping[F1, F2]) {
-		for _, m := range mappings {
-			set := getDedupSet(m.From)
-			if len(m.ToList) == 1 {
-				for _, to := range m.ToList {
-					_, existed := set[to]
-					if existed {
-						panic(fmt.Sprintf(
-							"duplicated destination field %q for source field %q",
-							dest.GetFullFieldName(to),
-							source.GetFullFieldName(m.From),
-						))
-					}
-					set[to] = emptyStruct{}
+	for _, m := range mappings {
+		set := getDedupSet(m.From)
+		if len(m.ToList) == 1 {
+			for _, to := range m.ToList {
+				_, existed := set[to]
+				if existed {
+					panic(fmt.Sprintf(
+						"duplicated destination field %q for source field %q",
+						dest.GetFullFieldName(to),
+						source.GetFullFieldName(m.From),
+					))
 				}
+				set[to] = emptyStruct{}
 			}
-			fieldMap[m.From] = append(fieldMap[m.From], m.ToList)
 		}
+		fieldMap[m.From] = append(fieldMap[m.From], m.ToList)
 	}
-
-	addMappingList(mappings)
 
 	return &Mapper[F1, F2]{
 		parentOf: source.ParentOf,
