@@ -6,48 +6,59 @@ import "fmt"
 type Mapper[F1 Field, T1 MapType[F1], F2 Field, T2 MapType[F2]] struct {
 	parentOf func(source F1) F1
 	fieldMap map[F1][][]F2
-	mappings []mappingData[F1, F2]
+	mappings []MappingData[F1, F2]
 }
 
-type mappingData[F1, F2 Field] struct {
+// MappingData ...
+type MappingData[F1, F2 Field] struct {
 	from   F1
 	toList []F2
 }
 
 // MappingOption ...
-type MappingOption[F1, F2 Field] func(mappings []mappingData[F1, F2]) []mappingData[F1, F2]
+type MappingOption[F1 Field, T1 MapType[F1], F2 Field, T2 MapType[F2]] func(
+	mappings []MappingData[F1, F2],
+) []MappingData[F1, F2]
 
 // NewMapping ...
-func NewMapping[F1 Field, F2 Field](from F1, toList ...F2) MappingOption[F1, F2] {
+func NewMapping[F1, F2 Field](
+	from F1, toList ...F2,
+) MappingData[F1, F2] {
 	if len(toList) == 0 {
 		panic("missing destination fields")
 	}
-	return func(mappings []mappingData[F1, F2]) []mappingData[F1, F2] {
-		return append(mappings, mappingData[F1, F2]{from: from, toList: toList})
+	return MappingData[F1, F2]{from: from, toList: toList}
+}
+
+// WithSimpleMapping ...
+func WithSimpleMapping[F1 Field, T1 MapType[F1], F2 Field, T2 MapType[F2]](
+	_ *FieldMap[F1, T1], _ *FieldMap[F2, T2],
+	mappings ...MappingData[F1, F2],
+) MappingOption[F1, T1, F2, T2] {
+	return func(result []MappingData[F1, F2]) []MappingData[F1, F2] {
+		return append(result, mappings...)
 	}
 }
 
-// NewInheritMapping ...
-func NewInheritMapping[F1 Field, T1 MapType[F1], F2 Field, T2 MapType[F2], SubT1 MapType[F1], SubT2 MapType[F2]](
-	source *FieldMap[F1, T1],
-	dest *FieldMap[F2, T2],
+// WithInheritMapping ...
+func WithInheritMapping[F1 Field, T1 MapType[F1], F2 Field, T2 MapType[F2], SubT1 MapType[F1], SubT2 MapType[F2]](
+	source *FieldMap[F1, T1], dest *FieldMap[F2, T2],
 	inherit *Mapper[F1, SubT1, F2, SubT2],
-	sourceFunc func(m T1) SubT1,
-	destFunc func(m T2) SubT2,
-) MappingOption[F1, F2] {
-	return func(mappings []mappingData[F1, F2]) []mappingData[F1, F2] {
+	sourceFunc func(m T1) SubT1, destFunc func(m T2) SubT2,
+) MappingOption[F1, T1, F2, T2] {
+	return func(mappings []MappingData[F1, F2]) []MappingData[F1, F2] {
 		sourceDiff := sourceFunc(source.GetMapping()).GetRoot() - 1
 		destDiff := destFunc(dest.GetMapping()).GetRoot() - 1
 
 		for _, subMapping := range inherit.mappings {
 			newToList := make([]F2, 0, len(subMapping.toList))
 			for _, to := range subMapping.toList {
-				newToList = append(newToList, to-destDiff)
+				newToList = append(newToList, to+destDiff)
 			}
 
-			mappings = append(mappings, mappingData[F1, F2]{
-				from:   subMapping.from - sourceDiff,
-				toList: subMapping.toList,
+			mappings = append(mappings, MappingData[F1, F2]{
+				from:   subMapping.from + sourceDiff,
+				toList: newToList,
 			})
 		}
 		return mappings
@@ -58,9 +69,8 @@ type emptyStruct struct{}
 
 // NewMapper ...
 func NewMapper[F1 Field, T1 MapType[F1], F2 Field, T2 MapType[F2]](
-	source *FieldMap[F1, T1],
-	dest *FieldMap[F2, T2],
-	mappings ...MappingOption[F1, F2],
+	source *FieldMap[F1, T1], dest *FieldMap[F2, T2],
+	mappings ...MappingOption[F1, T1, F2, T2],
 ) *Mapper[F1, T1, F2, T2] {
 	fieldMap := map[F1][][]F2{}
 	dedupSets := map[F1]map[F2]emptyStruct{}
@@ -74,7 +84,7 @@ func NewMapper[F1 Field, T1 MapType[F1], F2 Field, T2 MapType[F2]](
 		return s
 	}
 
-	var mappingDataList []mappingData[F1, F2]
+	var mappingDataList []MappingData[F1, F2]
 	for _, option := range mappings {
 		mappingDataList = option(mappingDataList)
 	}
