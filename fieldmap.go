@@ -10,15 +10,21 @@ type Field interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64
 }
 
+// MapType ...
+type MapType[F Field] interface {
+	GetRoot() F
+}
+
 // RootField ...
 const RootField = "Root"
 
 // FieldMap ...
-type FieldMap[T any, F Field] struct {
+type FieldMap[F Field, T MapType[F]] struct {
 	options fieldMapOptions
 
-	mapping *T
-	fields  []F
+	mapping    T
+	fields     []F
+	structRoot F
 
 	children   []int64
 	parentList []F
@@ -51,40 +57,41 @@ func computeOptions(options []Option) fieldMapOptions {
 }
 
 // New ...
-func New[T any, F Field](options ...Option) *FieldMap[T, F] {
-	var mapping T
-	val := reflect.ValueOf(&mapping)
-	val = val.Elem()
-
+func New[F Field, T MapType[F]](options ...Option) *FieldMap[F, T] {
 	opts := computeOptions(options)
 
-	f := &FieldMap[T, F]{
+	f := &FieldMap[F, T]{
 		options:    opts,
-		mapping:    &mapping,
 		structTags: map[string][]string{},
 	}
 
 	ordinal := int64(0)
 	var info parentInfoData[F]
 
+	var mapping T
+	val := reflect.ValueOf(&mapping)
+	val = val.Elem()
+
 	f.traverse(val, &ordinal, info)
+
+	f.mapping = mapping
+
 	return f
 }
 
-func (*FieldMap[T, F]) getField(num int64) F {
+func (*FieldMap[F, T]) getField(num int64) F {
 	var field F
 	val := reflect.ValueOf(&field).Elem()
 	val.SetInt(num)
 	return field
 }
 
-func (*FieldMap[T, F]) getFieldType() reflect.Type {
+func (*FieldMap[F, T]) getFieldType() reflect.Type {
 	var field F
 	return reflect.TypeOf(field)
 }
 
 type parentInfoData[F Field] struct {
-	valid    bool
 	prevRoot F
 
 	fieldName     string
@@ -94,17 +101,17 @@ type parentInfoData[F Field] struct {
 }
 
 func (p parentInfoData[F]) isParentField(index int) bool {
-	return p.valid && index == 0
+	return index == 0
 }
 
 func (p parentInfoData[F]) computeFullName(currentName string) string {
-	if p.valid {
+	if len(p.fullFieldName) > 0 {
 		return p.fullFieldName + "." + currentName
 	}
 	return currentName
 }
 
-func (f *FieldMap[T, F]) findStructTags(
+func (f *FieldMap[F, T]) findStructTags(
 	fieldType reflect.StructField,
 	fullFieldName string,
 ) map[string]string {
@@ -125,27 +132,28 @@ func (f *FieldMap[T, F]) findStructTags(
 	return structTags
 }
 
-func (f *FieldMap[T, F]) getRootField(
+func (f *FieldMap[F, T]) getRootField(
 	val reflect.Value, parentInfo parentInfoData[F], ordinal *int64,
 ) F {
-	if parentInfo.valid {
-		panicStr := fmt.Sprintf("missing field %q for field %q", RootField, parentInfo.fullFieldName)
-
-		if val.NumField() == 0 {
-			panic(panicStr)
-		}
-
-		fieldName := val.Type().Field(0).Name
-		if fieldName != RootField {
-			panic(panicStr)
-		}
-		return f.getField(*ordinal + 1)
+	var panicStr string
+	if len(parentInfo.fullFieldName) > 0 {
+		panicStr = fmt.Sprintf("missing field %q for field %q", RootField, parentInfo.fullFieldName)
+	} else {
+		panicStr = fmt.Sprintf("missing field %q for root of struct", RootField)
 	}
-	var empty F
-	return empty
+
+	if val.NumField() == 0 {
+		panic(panicStr)
+	}
+
+	fieldName := val.Type().Field(0).Name
+	if fieldName != RootField {
+		panic(panicStr)
+	}
+	return f.getField(*ordinal + 1)
 }
 
-func (f *FieldMap[T, F]) handleSingleField(
+func (f *FieldMap[F, T]) handleSingleField(
 	val reflect.Value, i int, parentInfo parentInfoData[F],
 	rootField F, ordinal *int64,
 ) {
@@ -160,7 +168,6 @@ func (f *FieldMap[T, F]) handleSingleField(
 
 		if field.Kind() == reflect.Struct {
 			newInfo := parentInfoData[F]{
-				valid:    true,
 				prevRoot: rootField,
 
 				fieldName:     fieldName,
@@ -201,10 +208,33 @@ func (f *FieldMap[T, F]) handleSingleField(
 	field.SetInt(*ordinal)
 }
 
-func (f *FieldMap[T, F]) traverse(
+func (f *FieldMap[F, T]) checkGetRootImpl() {
+	var mapping T
+	rootVal := reflect.ValueOf(&mapping).Elem().Field(0)
+
+	panicIfNotEq := func(num int64) {
+		rootVal.SetInt(num)
+		if mapping.GetRoot() != f.getField(num) {
+			panic("invalid GetRoot implementation")
+		}
+	}
+	panicIfNotEq(1)
+	panicIfNotEq(3)
+	panicIfNotEq(7)
+	panicIfNotEq(13)
+	panicIfNotEq(31)
+}
+
+func (f *FieldMap[F, T]) traverse(
 	val reflect.Value, ordinal *int64, parentInfo parentInfoData[F],
 ) {
 	rootField := f.getRootField(val, parentInfo, ordinal)
+
+	var empty F
+	if parentInfo.prevRoot == empty {
+		f.checkGetRootImpl()
+		f.structRoot = rootField
+	}
 
 	for i := 0; i < val.NumField(); i++ {
 		f.handleSingleField(val, i, parentInfo, rootField, ordinal)
@@ -212,33 +242,33 @@ func (f *FieldMap[T, F]) traverse(
 }
 
 // GetMapping ...
-func (f *FieldMap[T, F]) GetMapping() *T {
+func (f *FieldMap[F, T]) GetMapping() T {
 	return f.mapping
 }
 
-func (*FieldMap[T, F]) indexOf(field F) int64 {
+func (*FieldMap[F, T]) indexOf(field F) int64 {
 	return reflect.ValueOf(field).Int() - 1
 }
 
 // IsStruct ...
-func (f *FieldMap[T, F]) IsStruct(field F) bool {
+func (f *FieldMap[F, T]) IsStruct(field F) bool {
 	index := f.indexOf(field)
 	return f.children[index] > 0
 }
 
 // ChildrenOf ...
-func (f *FieldMap[T, F]) ChildrenOf(field F) []F {
+func (f *FieldMap[F, T]) ChildrenOf(field F) []F {
 	index := f.indexOf(field)
 	return f.fields[index+1 : index+1+f.children[index]]
 }
 
 // ParentOf ...
-func (f *FieldMap[T, F]) ParentOf(field F) F {
+func (f *FieldMap[F, T]) ParentOf(field F) F {
 	return f.parentList[f.indexOf(field)]
 }
 
 // AncestorOf includes itself, parent, and all parents of parents
-func (f *FieldMap[T, F]) AncestorOf(field F) []F {
+func (f *FieldMap[F, T]) AncestorOf(field F) []F {
 	var empty F
 
 	result := []F{field}
@@ -252,12 +282,12 @@ func (f *FieldMap[T, F]) AncestorOf(field F) []F {
 }
 
 // GetFieldName ...
-func (f *FieldMap[T, F]) GetFieldName(field F) string {
+func (f *FieldMap[F, T]) GetFieldName(field F) string {
 	return f.fieldNames[f.indexOf(field)]
 }
 
 // GetFullFieldName ...
-func (f *FieldMap[T, F]) GetFullFieldName(field F) string {
+func (f *FieldMap[F, T]) GetFullFieldName(field F) string {
 	fullName := ""
 	for {
 		name := f.GetFieldName(field)
@@ -268,20 +298,19 @@ func (f *FieldMap[T, F]) GetFullFieldName(field F) string {
 		}
 
 		field = f.ParentOf(field)
-		var empty F
-		if field == empty {
+		if field == f.structRoot {
 			return fullName
 		}
 	}
 }
 
 // GetStructTag ...
-func (f *FieldMap[T, F]) GetStructTag(tag string, field F) string {
+func (f *FieldMap[F, T]) GetStructTag(tag string, field F) string {
 	return f.structTags[tag][f.indexOf(field)]
 }
 
 // GetFullStructTag ...
-func (f *FieldMap[T, F]) GetFullStructTag(tag string, field F) string {
+func (f *FieldMap[F, T]) GetFullStructTag(tag string, field F) string {
 	fullTag := ""
 	for {
 		tagName := f.GetStructTag(tag, field)
@@ -292,8 +321,7 @@ func (f *FieldMap[T, F]) GetFullStructTag(tag string, field F) string {
 		}
 
 		field = f.ParentOf(field)
-		var empty F
-		if field == empty {
+		if field == f.structRoot {
 			return fullTag
 		}
 	}

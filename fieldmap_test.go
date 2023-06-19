@@ -8,10 +8,14 @@ import (
 type field int
 
 type simpleData struct {
+	Root field
+
 	Sku      field `json:"sku"`
 	Name     field `json:"name"`
 	ImageURL field `json:"imageUrl"`
 }
+
+func (d simpleData) GetRoot() field { return d.Root }
 
 type sellerAttr struct {
 	Root field
@@ -30,58 +34,65 @@ type sellerData struct {
 }
 
 type productData struct {
+	Root     field
 	Sku      field      `json:"sku"`
 	Name     field      `json:"name"`
 	Seller   sellerData `json:"seller"`
 	ImageURL field      `json:"imageUrl"`
 }
 
+func (d productData) GetRoot() field {
+	return d.Root
+}
+
 func TestFieldMap__GetMapping(t *testing.T) {
 	t.Run("simple-struct", func(t *testing.T) {
-		fm := New[simpleData, field]()
+		fm := New[field, simpleData]()
 
 		p := fm.GetMapping()
 
-		assert.Equal(t, field(1), p.Sku)
-		assert.Equal(t, field(2), p.Name)
-		assert.Equal(t, field(3), p.ImageURL)
+		assert.Equal(t, field(1), p.Root)
+		assert.Equal(t, field(2), p.Sku)
+		assert.Equal(t, field(3), p.Name)
+		assert.Equal(t, field(4), p.ImageURL)
 	})
 
 	t.Run("complex-struct", func(t *testing.T) {
-		fm := New[productData, field]()
+		fm := New[field, productData]()
 
 		p := fm.GetMapping()
 
-		assert.Equal(t, field(1), p.Sku)
-		assert.Equal(t, field(2), p.Name)
-		assert.Equal(t, field(3), p.Seller.Root)
-		assert.Equal(t, field(4), p.Seller.ID)
-		assert.Equal(t, field(5), p.Seller.Name)
-		assert.Equal(t, field(6), p.Seller.Logo)
-		assert.Equal(t, field(7), p.Seller.Attr.Root)
-		assert.Equal(t, field(8), p.Seller.Attr.Code)
-		assert.Equal(t, field(9), p.Seller.Attr.Name)
-		assert.Equal(t, field(10), p.ImageURL)
+		assert.Equal(t, field(1), p.Root)
+		assert.Equal(t, field(2), p.Sku)
+		assert.Equal(t, field(3), p.Name)
+		assert.Equal(t, field(4), p.Seller.Root)
+		assert.Equal(t, field(5), p.Seller.ID)
+		assert.Equal(t, field(6), p.Seller.Name)
+		assert.Equal(t, field(7), p.Seller.Logo)
+		assert.Equal(t, field(8), p.Seller.Attr.Root)
+		assert.Equal(t, field(9), p.Seller.Attr.Code)
+		assert.Equal(t, field(10), p.Seller.Attr.Name)
+		assert.Equal(t, field(11), p.ImageURL)
 
 		assert.Equal(t, false, fm.IsStruct(p.Sku))
 		assert.Equal(t, true, fm.IsStruct(p.Seller.Root))
 		assert.Equal(t, false, fm.IsStruct(p.Seller.ID))
 
-		assert.Equal(t, []field{4, 5, 6, 7}, fm.ChildrenOf(p.Seller.Root))
+		assert.Equal(t, []field{5, 6, 7, 8}, fm.ChildrenOf(p.Seller.Root))
 
 		assert.Equal(t, p.Seller.Root, fm.ParentOf(p.Seller.ID))
 		assert.Equal(t, p.Seller.Root, fm.ParentOf(p.Seller.Name))
 
-		assert.Equal(t, field(0), fm.ParentOf(p.Seller.Root))
+		assert.Equal(t, field(1), fm.ParentOf(p.Seller.Root))
 
-		assert.Equal(t, field(0), fm.ParentOf(p.Sku))
-		assert.Equal(t, field(0), fm.ParentOf(p.Name))
+		assert.Equal(t, field(1), fm.ParentOf(p.Sku))
+		assert.Equal(t, field(1), fm.ParentOf(p.Name))
 
-		assert.Equal(t, []field{p.Seller.Name, p.Seller.Root}, fm.AncestorOf(p.Seller.Name))
+		assert.Equal(t, []field{p.Seller.Name, p.Seller.Root, p.Root}, fm.AncestorOf(p.Seller.Name))
 	})
 
 	t.Run("simple struct get field name", func(t *testing.T) {
-		fm := New[simpleData, field]()
+		fm := New[field, simpleData]()
 
 		p := fm.GetMapping()
 
@@ -93,7 +104,7 @@ func TestFieldMap__GetMapping(t *testing.T) {
 	})
 
 	t.Run("complex struct get field name", func(t *testing.T) {
-		fm := New[productData, field]()
+		fm := New[field, productData]()
 
 		p := fm.GetMapping()
 
@@ -115,13 +126,16 @@ type dataWithoutStructTagInner struct {
 }
 
 type dataWithoutStructTag struct {
+	Root  field
 	Sku   field                     `json:"sku"`
 	Inner dataWithoutStructTagInner `json:"inner"`
 }
 
+func (d dataWithoutStructTag) GetRoot() field { return d.Root }
+
 func TestFieldMap__StructTag(t *testing.T) {
 	t.Run("simple struct", func(t *testing.T) {
-		fm := New[simpleData, field](
+		fm := New[field, simpleData](
 			WithStructTags("json"),
 		)
 
@@ -135,7 +149,7 @@ func TestFieldMap__StructTag(t *testing.T) {
 	})
 
 	t.Run("complex struct", func(t *testing.T) {
-		fm := New[productData, field](
+		fm := New[field, productData](
 			WithStructTags("json"),
 		)
 
@@ -158,7 +172,7 @@ func TestFieldMap__StructTag(t *testing.T) {
 
 	t.Run("panics when type without struct tag", func(t *testing.T) {
 		assert.PanicsWithValue(t, `missing struct tag "json" for field "Inner.Name"`, func() {
-			_ = New[dataWithoutStructTag, field](
+			_ = New[field, dataWithoutStructTag](
 				WithStructTags("json"),
 			)
 		})
@@ -167,6 +181,8 @@ func TestFieldMap__StructTag(t *testing.T) {
 
 type emptyTestStruct struct {
 }
+
+func (emptyTestStruct) GetRoot() field { return 0 }
 
 type structInnerEmpty struct {
 	Root field
@@ -178,12 +194,26 @@ type structInnerMissingRoot struct {
 }
 
 type structWithInnerEmpty struct {
+	Root  field
 	Inner structInnerEmpty
 }
 
+func (d structWithInnerEmpty) GetRoot() field { return d.Root }
+
+type structWithInvalidGetRoot struct {
+	Root field
+}
+
+func (structWithInvalidGetRoot) GetRoot() field {
+	return 0
+}
+
 type structWithInnerMissingRoot struct {
+	Root  field
 	Inner structInnerMissingRoot
 }
+
+func (d structWithInnerMissingRoot) GetRoot() field { return d.Root }
 
 type structWithSku struct {
 	Root field
@@ -191,43 +221,57 @@ type structWithSku struct {
 }
 
 type structWithInvalidType struct {
+	Root  field
 	Inner structWithSku
 }
+
+func (d structWithInvalidType) GetRoot() field { return d.Root }
 
 type structWithInvalidRoot struct {
 	Root string
 }
 
 type structWithInvalidRootType struct {
+	Root  field
 	Inner structWithInvalidRoot
 }
 
+func (d structWithInvalidRootType) GetRoot() field { return d.Root }
+
 func TestFieldMap__Errors(t *testing.T) {
 	t.Run("simple struct", func(t *testing.T) {
-		New[emptyTestStruct, field]()
+		assert.PanicsWithValue(t, `missing field "Root" for root of struct`, func() {
+			New[field, emptyTestStruct]()
+		})
 	})
 
 	t.Run("inner struct is empty", func(t *testing.T) {
 		assert.PanicsWithValue(t, `missing field "Root" for field "Inner.Attr"`, func() {
-			New[structWithInnerEmpty, field]()
+			New[field, structWithInnerEmpty]()
 		})
 	})
 
-	t.Run("inner struct without root ", func(t *testing.T) {
+	t.Run("invalid GetRoot implementation", func(t *testing.T) {
+		assert.PanicsWithValue(t, `invalid GetRoot implementation`, func() {
+			New[field, structWithInvalidGetRoot]()
+		})
+	})
+
+	t.Run("inner struct without root", func(t *testing.T) {
 		assert.PanicsWithValue(t, `missing field "Root" for field "Inner"`, func() {
-			New[structWithInnerMissingRoot, field]()
+			New[field, structWithInnerMissingRoot]()
 		})
 	})
 
 	t.Run("invalid type for field sku", func(t *testing.T) {
 		assert.PanicsWithValue(t, `invalid type for field "Inner.Sku"`, func() {
-			New[structWithInvalidType, field]()
+			New[field, structWithInvalidType]()
 		})
 	})
 
 	t.Run("invalid type for field root", func(t *testing.T) {
 		assert.PanicsWithValue(t, `invalid type for field "Inner.Root"`, func() {
-			New[structWithInvalidRootType, field]()
+			New[field, structWithInvalidRootType]()
 		})
 	})
 }

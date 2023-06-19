@@ -9,19 +9,29 @@ type sourceField int
 type destField int
 
 type sourceDataSimple struct {
+	Root sourceField
 	Sku  sourceField
 	Name sourceField
 	Body sourceField
 }
 
+func (d sourceDataSimple) GetRoot() sourceField {
+	return d.Root
+}
+
 type destDataSimple struct {
+	Root   destField
 	Info   destField
 	Detail destField
 }
 
+func (d destDataSimple) GetRoot() destField {
+	return d.Root
+}
+
 func TestMapping_Simple_Structs(t *testing.T) {
-	sourceFm := New[sourceDataSimple, sourceField]()
-	destFm := New[destDataSimple, destField]()
+	sourceFm := New[sourceField, sourceDataSimple]()
+	destFm := New[destField, destDataSimple]()
 
 	source := sourceFm.GetMapping()
 	dest := destFm.GetMapping()
@@ -56,12 +66,15 @@ type sourceSeller struct {
 }
 
 type sourceDataComplex struct {
+	Root     sourceField
 	Sku      sourceField
 	Name     sourceField
 	Body     sourceField
 	Seller   sourceSeller
 	ImageURL sourceField
 }
+
+func (d sourceDataComplex) GetRoot() sourceField { return d.Root }
 
 type destInfo struct {
 	Root destField
@@ -72,20 +85,24 @@ type destInfo struct {
 
 type destDetail struct {
 	Root destField
-
 	Body destField
 }
 
 type destDataComplex struct {
+	Root       destField
 	Info       destInfo
 	Detail     destDetail
 	SearchText destField
 }
 
+func (d destDataComplex) GetRoot() destField {
+	return d.Root
+}
+
 func TestMapping_Complex(t *testing.T) {
 	t.Run("normal", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -124,8 +141,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("one field to multiple dest fields using logical AND", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -139,8 +156,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("one field to multiple dest fields using logical OR, found the first source field", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -156,8 +173,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("one field to multiple dest fields using logical OR, found the first source field", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -172,8 +189,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("children before parent", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -188,8 +205,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("not found any mapping", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -203,8 +220,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("duplicated", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -219,8 +236,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("with AND not duplicated", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -233,8 +250,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("multiple source fields to one dest field", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 		dest := destFm.GetMapping()
@@ -250,8 +267,8 @@ func TestMapping_Complex(t *testing.T) {
 	})
 
 	t.Run("panics when mapping without dest fields", func(t *testing.T) {
-		sourceFm := New[sourceDataComplex, sourceField]()
-		destFm := New[destDataComplex, destField]()
+		sourceFm := New[sourceField, sourceDataComplex]()
+		destFm := New[destField, destDataComplex]()
 
 		source := sourceFm.GetMapping()
 
