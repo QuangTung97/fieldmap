@@ -248,4 +248,18 @@ func TestMapping_Complex(t *testing.T) {
 
 		assert.Equal(t, []destField{dest.SearchText}, m.FindMappedFields([]sourceField{source.Sku}))
 	})
+
+	t.Run("panics when mapping without dest fields", func(t *testing.T) {
+		sourceFm := New[sourceDataComplex, sourceField]()
+		destFm := New[destDataComplex, destField]()
+
+		source := sourceFm.GetMapping()
+
+		assert.PanicsWithValue(t, "missing destination fields", func() {
+			NewMapper(
+				sourceFm, destFm,
+				NewMapping[sourceField, destField](source.Sku),
+			)
+		})
+	})
 }

@@ -17,7 +17,7 @@ type Mapping[F1, F2 Field] struct {
 // NewMapping ...
 func NewMapping[F1 Field, F2 Field](from F1, toList ...F2) Mapping[F1, F2] {
 	if len(toList) == 0 {
-		panic("TODO") // TODO
+		panic("missing destination fields")
 	}
 	return Mapping[F1, F2]{From: from, ToList: toList}
 }
