@@ -29,10 +29,10 @@ func New[T any, F Field]() (*FieldMap[T, F], error) {
 		mapping: &mapping,
 	}
 
-	var emptyField F
 	ordinal := int64(0)
+	var info parentInfoData[F]
 
-	err := f.traverse(val, true, &ordinal, emptyField, "")
+	err := f.traverse(val, &ordinal, info)
 	if err != nil {
 		return nil, err
 	}
@@ -52,19 +52,23 @@ func (*FieldMap[T, F]) getFieldType() reflect.Type {
 	return reflect.TypeOf(field)
 }
 
-//revive:disable-next-line:flag-parameter
+type parentInfoData[F Field] struct {
+	valid           bool
+	prevRoot        F
+	parentFieldName string
+}
+
 func (f *FieldMap[T, F]) traverse(
-	val reflect.Value, isOuterMost bool, ordinal *int64,
-	prevParent F, parentFieldName string,
+	val reflect.Value, ordinal *int64, parentInfo parentInfoData[F],
 ) error {
-	var parent F
-	if !isOuterMost {
+	var rootField F
+	if parentInfo.valid {
 		fieldName := val.Type().Field(0).Name
 		if fieldName != "Root" {
 			// TODO Check missing root
 			panic("TODO")
 		}
-		parent = f.getField(*ordinal + 1)
+		rootField = f.getField(*ordinal + 1)
 	}
 
 	for i := 0; i < val.NumField(); i++ {
@@ -72,7 +76,12 @@ func (f *FieldMap[T, F]) traverse(
 		fieldName := val.Type().Field(i).Name
 
 		if field.Kind() == reflect.Struct {
-			err := f.traverse(field, false, ordinal, parent, fieldName)
+			newInfo := parentInfoData[F]{
+				valid:           true,
+				prevRoot:        rootField,
+				parentFieldName: fieldName,
+			}
+			err := f.traverse(field, ordinal, newInfo)
 			if err != nil {
 				return err
 			}
@@ -91,13 +100,13 @@ func (f *FieldMap[T, F]) traverse(
 
 		f.fields = append(f.fields, f.getField(*ordinal))
 
-		if !isOuterMost && i == 0 {
+		if parentInfo.valid && i == 0 {
 			f.children = append(f.children, int64(val.NumField()-1))
-			f.parentList = append(f.parentList, prevParent)
-			f.fieldNames = append(f.fieldNames, parentFieldName)
+			f.parentList = append(f.parentList, parentInfo.prevRoot)
+			f.fieldNames = append(f.fieldNames, parentInfo.parentFieldName)
 		} else {
 			f.children = append(f.children, 0)
-			f.parentList = append(f.parentList, parent)
+			f.parentList = append(f.parentList, rootField)
 			f.fieldNames = append(f.fieldNames, fieldName)
 		}
 		field.SetInt(*ordinal)
