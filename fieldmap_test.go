@@ -164,3 +164,70 @@ func TestFieldMap__StructTag(t *testing.T) {
 		})
 	})
 }
+
+type emptyTestStruct struct {
+}
+
+type structInnerEmpty struct {
+	Root field
+	Attr emptyTestStruct
+}
+
+type structInnerMissingRoot struct {
+	Attr emptyTestStruct
+}
+
+type structWithInnerEmpty struct {
+	Inner structInnerEmpty
+}
+
+type structWithInnerMissingRoot struct {
+	Inner structInnerMissingRoot
+}
+
+type structWithSku struct {
+	Root field
+	Sku  string
+}
+
+type structWithInvalidType struct {
+	Inner structWithSku
+}
+
+type structWithInvalidRoot struct {
+	Root string
+}
+
+type structWithInvalidRootType struct {
+	Inner structWithInvalidRoot
+}
+
+func TestFieldMap__Errors(t *testing.T) {
+	t.Run("simple struct", func(t *testing.T) {
+		New[emptyTestStruct, field]()
+	})
+
+	t.Run("inner struct is empty", func(t *testing.T) {
+		assert.PanicsWithValue(t, `missing field "Root" for field "Inner.Attr"`, func() {
+			New[structWithInnerEmpty, field]()
+		})
+	})
+
+	t.Run("inner struct without root ", func(t *testing.T) {
+		assert.PanicsWithValue(t, `missing field "Root" for field "Inner"`, func() {
+			New[structWithInnerMissingRoot, field]()
+		})
+	})
+
+	t.Run("invalid type for field sku", func(t *testing.T) {
+		assert.PanicsWithValue(t, `invalid type for field "Inner.Sku"`, func() {
+			New[structWithInvalidType, field]()
+		})
+	})
+
+	t.Run("invalid type for field root", func(t *testing.T) {
+		assert.PanicsWithValue(t, `invalid type for field "Inner.Root"`, func() {
+			New[structWithInvalidRootType, field]()
+		})
+	})
+}

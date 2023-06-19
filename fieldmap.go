@@ -10,6 +10,9 @@ type Field interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64
 }
 
+// RootField ...
+const RootField = "Root"
+
 // FieldMap ...
 type FieldMap[T any, F Field] struct {
 	options fieldMapOptions
@@ -81,9 +84,12 @@ func (*FieldMap[T, F]) getFieldType() reflect.Type {
 }
 
 type parentInfoData[F Field] struct {
-	valid      bool
-	prevRoot   F
-	fieldName  string
+	valid    bool
+	prevRoot F
+
+	fieldName     string
+	fullFieldName string
+
 	structTags map[string]string
 }
 
@@ -91,37 +97,47 @@ func (p parentInfoData[F]) isParentField(index int) bool {
 	return p.valid && index == 0
 }
 
+func (p parentInfoData[F]) computeFullName(currentName string) string {
+	if p.valid {
+		return p.fullFieldName + "." + currentName
+	}
+	return currentName
+}
+
 func (f *FieldMap[T, F]) findStructTags(
-	field reflect.Value, fieldType reflect.StructField,
-) (map[string]string, func()) {
-	panicFunc := func() {}
+	fieldType reflect.StructField,
+	fullFieldName string,
+) map[string]string {
 	structTags := map[string]string{}
 
 	for _, tag := range f.options.structTags {
 		tagVal := fieldType.Tag.Get(tag)
 		if len(tagVal) == 0 {
-			panicFunc = func() {
-				panic(
-					fmt.Sprintf(
-						"missing struct tag %q for field %q",
-						tag, f.GetFullFieldName(f.getField(field.Int())),
-					),
-				)
-			}
+			panic(
+				fmt.Sprintf(
+					"missing struct tag %q for field %q",
+					tag, fullFieldName,
+				),
+			)
 		}
 		structTags[tag] = tagVal
 	}
-	return structTags, panicFunc
+	return structTags
 }
 
 func (f *FieldMap[T, F]) getRootField(
 	val reflect.Value, parentInfo parentInfoData[F], ordinal *int64,
 ) F {
 	if parentInfo.valid {
+		panicStr := fmt.Sprintf("missing field %q for field %q", RootField, parentInfo.fullFieldName)
+
+		if val.NumField() == 0 {
+			panic(panicStr)
+		}
+
 		fieldName := val.Type().Field(0).Name
-		if fieldName != "Root" {
-			// TODO Check missing root
-			panic("TODO")
+		if fieldName != RootField {
+			panic(panicStr)
 		}
 		return f.getField(*ordinal + 1)
 	}
@@ -136,18 +152,20 @@ func (f *FieldMap[T, F]) handleSingleField(
 	field := val.Field(i)
 	fieldType := val.Type().Field(i)
 	fieldName := fieldType.Name
-
-	panicFunc := func() {}
+	fullFieldName := parentInfo.computeFullName(fieldName)
 
 	var currentStructTags map[string]string
 	if !parentInfo.isParentField(i) {
-		currentStructTags, panicFunc = f.findStructTags(field, fieldType)
+		currentStructTags = f.findStructTags(fieldType, fullFieldName)
 
 		if field.Kind() == reflect.Struct {
 			newInfo := parentInfoData[F]{
-				valid:      true,
-				prevRoot:   rootField,
-				fieldName:  fieldName,
+				valid:    true,
+				prevRoot: rootField,
+
+				fieldName:     fieldName,
+				fullFieldName: fullFieldName,
+
 				structTags: currentStructTags,
 			}
 			f.traverse(field, ordinal, newInfo)
@@ -156,11 +174,7 @@ func (f *FieldMap[T, F]) handleSingleField(
 	}
 
 	if field.Type() != f.getFieldType() {
-		panic("TODO") // TODO
-	}
-
-	if !field.CanSet() {
-		panic("TODO") // TODO
+		panic(fmt.Sprintf("invalid type for field %q", fullFieldName))
 	}
 
 	*ordinal++
@@ -185,8 +199,6 @@ func (f *FieldMap[T, F]) handleSingleField(
 		}
 	}
 	field.SetInt(*ordinal)
-
-	panicFunc()
 }
 
 func (f *FieldMap[T, F]) traverse(
