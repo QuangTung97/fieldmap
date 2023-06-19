@@ -128,7 +128,7 @@ func TestMapping_Complex(t *testing.T) {
 			m.FindMappedFields([]sourceField{source.Sku, source.Seller.Info.Logo}))
 	})
 
-	t.Run("one field to multiple dest fields", func(t *testing.T) {
+	t.Run("one field to multiple dest fields using logical AND", func(t *testing.T) {
 		sourceFm, err := New[sourceDataComplex, sourceField]()
 		assert.Equal(t, nil, err)
 
@@ -140,12 +140,33 @@ func TestMapping_Complex(t *testing.T) {
 
 		m := NewMapper(
 			sourceFm, destFm,
-			NewMapping(source.Sku, dest.Info.Root),
-			NewMapping(source.Sku, dest.SearchText),
-			NewMapping(source.Sku, dest.SearchText),
+			NewMapping(source.Sku, dest.Info.Root, dest.SearchText),
 		)
 
 		assert.Equal(t, []destField{dest.Info.Root, dest.SearchText}, m.FindMappedFields([]sourceField{source.Sku}))
+	})
+
+	t.Run("one field to multiple dest fields using logical OR", func(t *testing.T) {
+		sourceFm, err := New[sourceDataComplex, sourceField]()
+		assert.Equal(t, nil, err)
+
+		destFm, err := New[destDataComplex, destField]()
+		assert.Equal(t, nil, err)
+
+		source := sourceFm.GetMapping()
+		dest := destFm.GetMapping()
+
+		m := NewMapper(
+			sourceFm, destFm,
+			NewMapping(source.Name, dest.Info.Root),
+			NewMapping(source.Sku, dest.Info.Root),
+			NewMapping(source.Sku, dest.SearchText),
+		)
+
+		assert.Equal(t, 2.0, m.GetWeight(dest.Info.Root))
+		assert.Equal(t, 1.0, m.GetWeight(dest.Info.Root))
+
+		assert.Equal(t, []destField{dest.SearchText}, m.FindMappedFields([]sourceField{source.Sku}))
 	})
 
 	t.Run("multiple source fields to one dest field", func(t *testing.T) {
